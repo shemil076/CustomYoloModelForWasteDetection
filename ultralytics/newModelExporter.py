@@ -12,4 +12,4 @@ results = model.val()
 
 # Export the model to ONNX format
 # success = model.export(format='pt')
-# model.export(format='pt', weights='best')  # Explicitly export best model
+
