@@ -1,9 +1,5 @@
 from ultralytics import YOLO
 
-import importlib.util
-spec = importlib.util.spec_from_file_location("ChannelAttentionModule", "../ultralytics/models/experimental/attention.py")
-attention_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(attention_module)
 
 
 # Create a new YOLO model from scratch
