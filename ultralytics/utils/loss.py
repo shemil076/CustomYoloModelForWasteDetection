@@ -1,6 +1,5 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,7 +9,7 @@ from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
 from .metrics import bbox_iou, probiou
 from .tal import bbox2dist
-from ultralytics.utils import LOGGER
+
 
 class VarifocalLoss(nn.Module):
     """
@@ -61,75 +60,56 @@ class FocalLoss(nn.Module):
         return loss.mean(1).sum()
 
 
-class BboxLoss(nn.Module):
-    """Criterion class for computing training losses during training."""
+class EIoULoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, pred, target, xywh=True):
+        """
+        Calculate the Enhanced Intersection over Union (EIoU) loss.
+        
+        Args:
+            pred (torch.Tensor): Predicted bounding boxes, shape (N, 4).
+            target (torch.Tensor): Target bounding boxes, shape (N, 4).
+            xywh (bool): Whether the bounding box format is (x, y, w, h).
 
+        Returns:
+            torch.Tensor: The EIoU loss.
+        """
+        if xywh:
+            pred = xywh2xyxy(pred)
+            target = xywh2xyxy(target)
+        
+        # Calculate IoU
+        iou = bbox_iou(pred, target, xywh=False)
+        
+        # Center distance
+        pred_center = (pred[:, :2] + pred[:, 2:]) / 2
+        target_center = (target[:, :2] + target[:, 2:]) / 2
+        center_distance = torch.norm(pred_center - target_center, dim=1)
+        
+        # Aspect ratio
+        pred_aspect_ratio = (pred[:, 2] - pred[:, 0]) / (pred[:, 3] - pred[:, 1])
+        target_aspect_ratio = (target[:, 2] - target[:, 0]) / (target[:, 3] - target[:, 1])
+        aspect_ratio_diff = torch.abs(pred_aspect_ratio - target_aspect_ratio)
+        
+        # Combine terms
+        eiou = iou - (center_distance + aspect_ratio_diff)
+        eiou_loss = 1 - eiou
+        
+        return eiou_loss.mean()
+
+class BboxLoss(nn.Module):
     def __init__(self, reg_max, use_dfl=False):
-        """Initialize the BboxLoss module with regularization maximum and DFL settings."""
         super().__init__()
         self.reg_max = reg_max
         self.use_dfl = use_dfl
-
-    
-    def complete_iou_loss(box1, box2):
-        # box1, box2: [..., 4] (xywh) from predictions and targets
-
-        # Find smallest enclosing box
-        x1min, y1min = torch.min(box1[..., 0] - box1[..., 2] / 2, box2[..., 0] - box2[..., 2] / 2)
-        y1min = torch.min(box1[..., 1] - box1[..., 3] / 2, box2[..., 1] - box2[..., 3] / 2)
-        x2max, y2max = torch.max(box1[..., 0] + box1[..., 2] / 2, box2[..., 0] + box2[..., 2] / 2)
-        y2max = torch.max(box1[..., 1] + box1[..., 3] / 2, box2[..., 1] + box2[..., 3] / 2)
-        enclosing_area = (x2max - x1min) * (y2max - y1min)
-
-        # Calculate center, width, and height of boxes
-        b1_x, b1_y, b1_w, b1_h = box1[..., 0], box1[..., 1], box1[..., 2], box1[..., 3]
-        b2_x, b2_y, b2_w, b2_h = box2[..., 0], box2[..., 1], box2[..., 2], box2[..., 3]
-
-
-        # Calculate the areas of the bounding boxes
-        b1_area = b1_w * b1_h
-        b2_area = b2_w * b2_h 
-        
-
-        # Calculate overlap area
-        inter_area = (torch.min(x2max, b2_x) - torch.max(x1min, b1_x)) * (torch.min(y2max, b2_y) - torch.max(y1min, b1_y))
-        iou = inter_area / (b1_area + b2_area - inter_area + 1e-16)
-
-        # Calculate distance, aspect ratio factors
-        c = ((b2_x + b2_w / 2) - (b1_x + b1_w / 2)) ** 2 + ((b2_y + b2_h / 2) - (b1_y + b1_h / 2)) ** 2
-        d = ((x2max - x1min) ** 2 + (y2max - y1min) ** 2)
-        u = c / d 
-        v = (4 / (math.pi ** 2)) * (torch.atan(b1_w / b1_h) - torch.atan(b2_w / b2_h)) ** 2
-
-        # Complete IoU
-        with torch.no_grad():
-            alpha = v / (1 - iou + v + 1e-16)
-        ciou_loss = 1 - iou + u + alpha * v
-        return ciou_loss
-
+        self.eiou_loss = EIoULoss()
 
     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
-        """IoU loss."""
-        weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
-        iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
-        loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
-
-        pred_boxes = pred_bboxes[fg_mask]     
-        target_boxes = target_bboxes[fg_mask]
-
-        # Calculate CIoU Loss
-        ciou_loss = self.complete_iou_loss(pred_boxes, target_boxes) * weight
-        loss_iou += ciou_loss           # Add CIoU to total loss
-
-        # DFL loss
-        if self.use_dfl:
-            target_ltrb = bbox2dist(anchor_points, target_bboxes, self.reg_max)
-            loss_dfl = self._df_loss(pred_dist[fg_mask].view(-1, self.reg_max + 1), target_ltrb[fg_mask]) * weight
-            loss_dfl = loss_dfl.sum() / target_scores_sum
-        else:
-            loss_dfl = torch.tensor(0.0).to(pred_dist.device)
-
-        return loss_iou, loss_dfl
+        # Implementation for BboxLoss using EIoU
+        eiou_loss = self.eiou_loss(pred_bboxes[fg_mask], target_bboxes[fg_mask])
+        return eiou_loss, torch.tensor(0.0).to(pred_dist.device)
 
     @staticmethod
     def _df_loss(pred_dist, target):
@@ -147,71 +127,6 @@ class BboxLoss(nn.Module):
             F.cross_entropy(pred_dist, tl.view(-1), reduction="none").view(tl.shape) * wl
             + F.cross_entropy(pred_dist, tr.view(-1), reduction="none").view(tl.shape) * wr
         ).mean(-1, keepdim=True)
-    
-    
-# Custom implementation
-    
-# class EIoULoss(nn.Module):
-#     """Efficient Intersection over Union (EIoU) loss for object detection bounding boxes """
-#     def __init__(self, reduction='mean'):
-#         super().__init__()
-#         self.reduction = reduction
-
-#     def forward(self, pred_bboxes, target_bboxes):
-#         """
-#         Computes the Efficient Intersection over Union (EIoU) loss.
-
-#         Args:
-#             pred_bboxes (torch.Tensor): Predicted bounding boxes (x1, y1, x2, y2)
-#             target_bboxes (torch.Tensor): Ground-truth bounding boxes (x1, y1, x2, y2)
-
-#         Returns:
-#             torch.Tensor: The EIoU loss
-#         """
-
-#         # Calculate intersection, union, and enclosure areas
-#         x1_l, y1_l, x2_l, y2_l = pred_bboxes[:, 0], pred_bboxes[:, 1], pred_bboxes[:, 2], pred_bboxes[:, 3]
-#         x1_r, y1_r, x2_r, y2_r = target_bboxes[:, 0], target_bboxes[:, 1], target_bboxes[:, 2], target_bboxes[:, 3]
-
-#         xA = torch.max(x1_l, x1_r)
-#         yA = torch.max(y1_l, y1_r)
-#         xB = torch.min(x2_l, x2_r)
-#         yB = torch.min(y2_l, y2_r)
-#         inter = torch.clamp((xB - xA), min=0) * torch.clamp((yB - yA), min=0)
-
-#         area_pred = (x2_l - x1_l) * (y2_l - y1_l)
-#         area_gt = (x2_r - x1_r) * (y2_r - y1_r)
-#         union = area_pred + area_gt - inter
-
-#         iou = inter / union
-
-#         # Compute enclosing box
-#         cw = torch.max(x2_l, x2_r) - torch.min(x1_l, x1_r)
-#         ch = torch.max(y2_l, y2_r) - torch.min(y1_l, y1_r)
-
-#         # Compute distances
-#         c2 = cw ** 2 + ch ** 2
-#         rho2 = ((x2_l + x1_l - x2_r - x1_r) ** 2 + (y2_l + y1_l - y2_r - y1_r) ** 2) / 4
-
-#         # Width and height differences
-#         w_diff = torch.abs(x2_l - x1_l - x2_r + x1_r)
-#         h_diff = torch.abs(y2_l - y1_l - y2_r + y1_r)
-
-#         # Loss terms
-#         iou_loss = 1 - iou
-#         distance_loss = rho2 / c2
-#         shape_loss = w_diff / cw + h_diff / ch
-
-#         # Overall loss
-#         e_iou_loss = iou_loss + distance_loss + shape_loss
-
-#         if self.reduction == 'mean':
-#             return e_iou_loss.mean()
-#         elif self.reduction == 'sum':
-#             return e_iou_loss.sum()
-#         else:
-#             raise ValueError(f"Invalid reduction method '{self.reduction}'")
-
 
 
 class RotatedBboxLoss(BboxLoss):
