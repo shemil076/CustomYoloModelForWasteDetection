@@ -10,7 +10,7 @@ from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
 from .metrics import bbox_iou, probiou
 from .tal import bbox2dist
-
+from ultralytics.utils import LOGGER
 
 class VarifocalLoss(nn.Module):
     """
@@ -149,6 +149,69 @@ class BboxLoss(nn.Module):
         ).mean(-1, keepdim=True)
     
     
+# Custom implementation
+    
+# class EIoULoss(nn.Module):
+#     """Efficient Intersection over Union (EIoU) loss for object detection bounding boxes """
+#     def __init__(self, reduction='mean'):
+#         super().__init__()
+#         self.reduction = reduction
+
+#     def forward(self, pred_bboxes, target_bboxes):
+#         """
+#         Computes the Efficient Intersection over Union (EIoU) loss.
+
+#         Args:
+#             pred_bboxes (torch.Tensor): Predicted bounding boxes (x1, y1, x2, y2)
+#             target_bboxes (torch.Tensor): Ground-truth bounding boxes (x1, y1, x2, y2)
+
+#         Returns:
+#             torch.Tensor: The EIoU loss
+#         """
+
+#         # Calculate intersection, union, and enclosure areas
+#         x1_l, y1_l, x2_l, y2_l = pred_bboxes[:, 0], pred_bboxes[:, 1], pred_bboxes[:, 2], pred_bboxes[:, 3]
+#         x1_r, y1_r, x2_r, y2_r = target_bboxes[:, 0], target_bboxes[:, 1], target_bboxes[:, 2], target_bboxes[:, 3]
+
+#         xA = torch.max(x1_l, x1_r)
+#         yA = torch.max(y1_l, y1_r)
+#         xB = torch.min(x2_l, x2_r)
+#         yB = torch.min(y2_l, y2_r)
+#         inter = torch.clamp((xB - xA), min=0) * torch.clamp((yB - yA), min=0)
+
+#         area_pred = (x2_l - x1_l) * (y2_l - y1_l)
+#         area_gt = (x2_r - x1_r) * (y2_r - y1_r)
+#         union = area_pred + area_gt - inter
+
+#         iou = inter / union
+
+#         # Compute enclosing box
+#         cw = torch.max(x2_l, x2_r) - torch.min(x1_l, x1_r)
+#         ch = torch.max(y2_l, y2_r) - torch.min(y1_l, y1_r)
+
+#         # Compute distances
+#         c2 = cw ** 2 + ch ** 2
+#         rho2 = ((x2_l + x1_l - x2_r - x1_r) ** 2 + (y2_l + y1_l - y2_r - y1_r) ** 2) / 4
+
+#         # Width and height differences
+#         w_diff = torch.abs(x2_l - x1_l - x2_r + x1_r)
+#         h_diff = torch.abs(y2_l - y1_l - y2_r + y1_r)
+
+#         # Loss terms
+#         iou_loss = 1 - iou
+#         distance_loss = rho2 / c2
+#         shape_loss = w_diff / cw + h_diff / ch
+
+#         # Overall loss
+#         e_iou_loss = iou_loss + distance_loss + shape_loss
+
+#         if self.reduction == 'mean':
+#             return e_iou_loss.mean()
+#         elif self.reduction == 'sum':
+#             return e_iou_loss.sum()
+#         else:
+#             raise ValueError(f"Invalid reduction method '{self.reduction}'")
+
 
 
 class RotatedBboxLoss(BboxLoss):
