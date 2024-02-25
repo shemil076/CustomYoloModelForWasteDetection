@@ -3,9 +3,9 @@ from ultralytics import YOLO
 
 
 # Create a new YOLO model from scratch
-model = YOLO('/Users/pramudithakarunarathna/Documents/IIT BEng Software Engineering/FYP/Implementations/ultralytics-main/ultralytics/cfg/models/v8/yolov8n.yaml')
+model = YOLO('/content/CustomYoloModelForWasteDetection/ultralytics/cfg/models/v8/yolov8m.yaml')
 
-results = model.train(data='/Users/pramudithakarunarathna/Documents/IIT BEng Software Engineering/FYP/Implementations/ultralytics-main/ultralytics/cfg/datasets/datasetcust.yaml', epochs=20)
+results = model.train(data='/content/CustomYoloModelForWasteDetection/ultralytics/cfg/datasets/datasetcust.yaml', epochs=100)
 
 # Evaluate the model's performance on the validation set
 results = model.val()
