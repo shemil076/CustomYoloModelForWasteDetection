@@ -36,6 +36,7 @@ from .block import (
     Proto,
     RepC3,
     ResNetLayer,
+    C2f_DCNv2,
 )
 from .conv import (
     CBAM,
@@ -51,6 +52,7 @@ from .conv import (
     LightConv,
     RepConv,
     SpatialAttention,
+    DCNv2
 )
 from .head import OBB, Classify, Detect, Pose, RTDETRDecoder, Segment
 from .transformer import (
@@ -114,4 +116,6 @@ __all__ = (
     "MLP",
     "ResNetLayer",
     "OBB",
+    "DCNv2",
+    "C2f_DCNv2"
 )

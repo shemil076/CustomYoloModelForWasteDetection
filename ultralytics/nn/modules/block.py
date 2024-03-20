@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .conv import Conv, DWConv, GhostConv, LightConv, RepConv
+from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, DCNv2
 from .transformer import TransformerBlock
 
 __all__ = (
@@ -27,6 +27,7 @@ __all__ = (
     "Proto",
     "RepC3",
     "ResNetLayer",
+    "C2f_DCNv2"
 )
 
 
@@ -390,3 +391,31 @@ class ResNetLayer(nn.Module):
     def forward(self, x):
         """Forward pass through the ResNet layer."""
         return self.layer(x)
+
+class Bottleneck_DCNV2(Bottleneck):
+    """Standard bottleneck with DCNV2."""
+
+    def __init__(
+        self, c1, c2, shortcut=True, g=1, k=(3, 3), e=0.5
+    ):  # ch_in, ch_out, shortcut, groups, kernels, expand
+        super().__init__(c1, c2, shortcut, g, k, e)
+        c_ = int(c2 * e)  # hidden channels
+        self.cv2 = DCNv2(c_, c2, k[1], 1)
+
+
+class C3_DCNv2(C3):
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)  # hidden channels
+        self.m = nn.Sequential(
+            *(Bottleneck_DCNV2(c_, c_, shortcut, g, k=(1, 3), e=1.0) for _ in range(n))
+        )
+
+
+class C2f_DCNv2(C2f):
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        self.m = nn.ModuleList(
+            Bottleneck_DCNV2(self.c, self.c, shortcut, g, k=(3, 3), e=1.0)
+            for _ in range(n)
+        )

@@ -25,11 +25,11 @@ backbone:
   - [-1, 1, CBAM, [512]] # CBAM after C2f block
   - [-1, 1, Conv, [1024, 3, 2]] # 7-P5/32
   - [-1, 3, C2f, [1024, True]]
-  - [-1, 1, CBAM, [1024]] # CBAM before SPPF for enhanced attention
+  - [-1, 3, C2f_DCNv2, [1024, True]]
   - [-1, 1, SPPF, [1024, 5]] # 9
 
 # YOLOv8.0n head
-head:
+head:  
   - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
   - [[-1, 6], 1, Concat, [1]] # cat backbone P4
   - [-1, 3, C2f, [512]] # 12
@@ -37,7 +37,6 @@ head:
   - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
   - [[-1, 4], 1, Concat, [1]] # cat backbone P3
   - [-1, 3, C2f, [256]] # 15 (P3/8-small)
-  - [-1, 1, CBAM, [256]]
 
   - [-1, 1, Conv, [256, 3, 2]]
   - [[-1, 12], 1, Concat, [1]] # cat head P4
