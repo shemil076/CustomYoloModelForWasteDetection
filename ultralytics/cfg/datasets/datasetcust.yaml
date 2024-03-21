@@ -1,5 +1,5 @@
-train: /kaggle/working/yolo_data/images/train
-val: /kaggle/working/yolo_data/images/val
+train: /content/yolo_data/images/train
+val: //content/yolo_data/images/val
 #test: ../test/images
 
 nc: 20
