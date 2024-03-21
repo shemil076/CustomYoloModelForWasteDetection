@@ -1,5 +1,5 @@
 train: /content/yolo_data/images/train
-val: //content/yolo_data/images/val
+val: /content/yolo_data/images/val
 #test: ../test/images
 
 nc: 20

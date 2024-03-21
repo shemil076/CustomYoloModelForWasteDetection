@@ -3,7 +3,7 @@ from ultralytics import YOLO
 
 
 # Create a new YOLO model from scratch
-model = YOLO('/content/CustomYoloModelForWasteDetection/ultralytics/cfg/datasets/datasetcust.yaml')
+model = YOLO('/content/CustomYoloModelForWasteDetection/ultralytics/cfg/models/v8/yolov8m.yaml')
 
 results = model.train(data='/content/CustomYoloModelForWasteDetection/ultralytics/cfg/datasets/datasetcust.yaml', epochs=20, imgsz=640, batch=16)
 
