@@ -60,30 +60,56 @@ class FocalLoss(nn.Module):
         return loss.mean(1).sum()
 
 
-class BboxLoss(nn.Module):
-    """Criterion class for computing training losses during training."""
+class EIoULoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, pred, target, xywh=True):
+        """
+        Calculate the Enhanced Intersection over Union (EIoU) loss.
+        
+        Args:
+            pred (torch.Tensor): Predicted bounding boxes, shape (N, 4).
+            target (torch.Tensor): Target bounding boxes, shape (N, 4).
+            xywh (bool): Whether the bounding box format is (x, y, w, h).
 
+        Returns:
+            torch.Tensor: The EIoU loss.
+        """
+        if xywh:
+            pred = xywh2xyxy(pred)
+            target = xywh2xyxy(target)
+        
+        # Calculate IoU
+        iou = bbox_iou(pred, target, xywh=False)
+        
+        # Center distance
+        pred_center = (pred[:, :2] + pred[:, 2:]) / 2
+        target_center = (target[:, :2] + target[:, 2:]) / 2
+        center_distance = torch.norm(pred_center - target_center, dim=1)
+        
+        # Aspect ratio
+        pred_aspect_ratio = (pred[:, 2] - pred[:, 0]) / (pred[:, 3] - pred[:, 1])
+        target_aspect_ratio = (target[:, 2] - target[:, 0]) / (target[:, 3] - target[:, 1])
+        aspect_ratio_diff = torch.abs(pred_aspect_ratio - target_aspect_ratio)
+        
+        # Combine terms
+        eiou = iou - (center_distance + aspect_ratio_diff)
+        eiou_loss = 1 - eiou
+        
+        return eiou_loss.mean()
+
+class BboxLoss(nn.Module):
     def __init__(self, reg_max, use_dfl=False):
-        """Initialize the BboxLoss module with regularization maximum and DFL settings."""
         super().__init__()
         self.reg_max = reg_max
         self.use_dfl = use_dfl
+        self.eiou_loss = EIoULoss()
 
     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
-        """IoU loss."""
-        weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
-        iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
-        loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
-
-        # DFL loss
-        if self.use_dfl:
-            target_ltrb = bbox2dist(anchor_points, target_bboxes, self.reg_max)
-            loss_dfl = self._df_loss(pred_dist[fg_mask].view(-1, self.reg_max + 1), target_ltrb[fg_mask]) * weight
-            loss_dfl = loss_dfl.sum() / target_scores_sum
-        else:
-            loss_dfl = torch.tensor(0.0).to(pred_dist.device)
-
-        return loss_iou, loss_dfl
+        # Implementation for BboxLoss using EIoU
+        eiou_loss = self.eiou_loss(pred_bboxes[fg_mask], target_bboxes[fg_mask])
+        return eiou_loss, torch.tensor(0.0).to(pred_dist.device)
 
     @staticmethod
     def _df_loss(pred_dist, target):
@@ -137,10 +163,10 @@ class KeypointLoss(nn.Module):
 
     def forward(self, pred_kpts, gt_kpts, kpt_mask, area):
         """Calculates keypoint loss factor and Euclidean distance loss for predicted and actual keypoints."""
-        d = (pred_kpts[..., 0] - gt_kpts[..., 0]).pow(2) + (pred_kpts[..., 1] - gt_kpts[..., 1]).pow(2)
+        d = (pred_kpts[..., 0] - gt_kpts[..., 0]) ** 2 + (pred_kpts[..., 1] - gt_kpts[..., 1]) ** 2
         kpt_loss_factor = kpt_mask.shape[1] / (torch.sum(kpt_mask != 0, dim=1) + 1e-9)
         # e = d / (2 * (area * self.sigmas) ** 2 + 1e-9)  # from formula
-        e = d / ((2 * self.sigmas).pow(2) * (area + 1e-9) * 2)  # from cocoeval
+        e = d / (2 * self.sigmas) ** 2 / (area + 1e-9) / 2  # from cocoeval
         return (kpt_loss_factor.view(-1, 1) * ((1 - torch.exp(-e)) * kpt_mask)).mean()
 
 
@@ -597,12 +623,7 @@ class v8ClassificationLoss:
 
 
 class v8OBBLoss(v8DetectionLoss):
-    def __init__(self, model):
-        """
-        Initializes v8OBBLoss with model, assigner, and rotated bbox loss.
-
-        Note model must be de-paralleled.
-        """
+    def __init__(self, model):  # model must be de-paralleled
         super().__init__(model)
         self.assigner = RotatedTaskAlignedAssigner(topk=10, num_classes=self.nc, alpha=0.5, beta=6.0)
         self.bbox_loss = RotatedBboxLoss(self.reg_max - 1, use_dfl=self.use_dfl).to(self.device)
