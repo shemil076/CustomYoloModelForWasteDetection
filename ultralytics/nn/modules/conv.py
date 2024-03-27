@@ -313,19 +313,19 @@ class ChannelAttention(nn.Module):
 
 
 class SpatialAttention(nn.Module):
-
     def __init__(self, kernel_size=7):
         """
         Initialize the Spatial Attention module.
 
         Args:
-            kernel_size (int): Size of the convolutional kernel for spatial attention.
+         kernel_size (int): Size of the convolutional kernel for spatial attention.
         """
         super().__init__()
-        assert kernel_size in (3, 7), 'kernel size must be 3 or 7'
-        padding = 3 if kernel_size == 7 else 1
+        # Ensure kernel_size is odd to maintain the feature map size
+        assert kernel_size % 2 == 1, 'kernel size must be odd'
+        padding = kernel_size // 2
         self.conv = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
-        self.sigmoid = nn.Sigmoid()
+        self.sigmoid = nn.Sigmoid()  
 
     def forward(self, x):
         """
@@ -346,7 +346,7 @@ class SpatialAttention(nn.Module):
 
 class CBAM(nn.Module):
     # ch_in, ch_out, shortcut, groups, expansion, ratio, kernel_size
-    def __init__(self, c1, c2, kernel_size=3, shortcut=True, g=1, e=0.5, ratio=8):
+    def __init__(self, c1, c2, kernel_size=5, shortcut=True, g=1, e=0.5, ratio=8):
         """
         Initialize the CBAM (Convolutional Block Attention Module)
 
@@ -381,193 +381,6 @@ class CBAM(nn.Module):
         out = self.channel_attention(x2) * x2
         out = self.spatial_attention(out) * out
         return x + out if self.add else out
-
-# class ASFF(nn.Module):
-#     def __init__(self, level, multiplier=1, rfb=False, vis=False, act_cfg=True):
-#         """
-#         multiplier should be 1, 0.5
-#         which means, the channel of ASFF can be
-#         512, 256, 128 -> multiplier=0.5
-#         1024, 512, 256 -> multiplier=1
-#         For even smaller, you need change code manually.
-#         """
-#         super(ASFF, self).__init__()
-#         print("self", )
-#         self.level = level
-#         print("self.level", self.level)
-#         print("multiplier",multiplier)
-#         self.dim = [int(1024 * multiplier), int(512 * multiplier),
-#                     int(256 * multiplier)]
-#         print("self.dim",self.dim)
-
-#         self.inter_dim = self.dim[self.level]
-#         print("expected",  self.inter_dim)
-#         print("Actual", self.dim[self.level])
-
-#         if level == 0:
-#             self.stride_level_1 = Conv(int(512 * multiplier), self.inter_dim, 3, 2)
-
-#             self.stride_level_2 = Conv(int(256 * multiplier), self.inter_dim, 3, 2)
-
-#             self.expand = Conv(self.inter_dim, int(1024 * multiplier), 3, 1)
-#         elif level == 1:
-#             self.compress_level_0 = Conv(int(1024 * multiplier), self.inter_dim, 1, 1)
-#             self.stride_level_2 = Conv(int(256 * multiplier), self.inter_dim, 3, 2)
-#             self.expand = Conv(self.inter_dim, int(512 * multiplier), 3, 1)
-#         elif level == 2:
-#             self.compress_level_0 = Conv(int(1024 * multiplier), self.inter_dim, 1, 1)
-#             self.compress_level_1 = Conv(int(512 * multiplier), self.inter_dim, 1, 1)
-#             self.expand = Conv(self.inter_dim, int(256 * multiplier), 3, 1)
-
-#         # when adding rfb, we use half number of channels to save memory
-#         compress_c = 8 if rfb else 16
-#         self.weight_level_0 = Conv(self.inter_dim, compress_c, 1, 1)
-#         self.weight_level_1 = Conv(self.inter_dim, compress_c, 1, 1)
-#         self.weight_level_2 = Conv(self.inter_dim, compress_c, 1, 1)
-
-#         self.weight_levels = Conv(compress_c * 3, 3, 1, 1)
-#         self.vis = vis
-
-#     def forward(self, x):  # l,m,s
-#         """
-#         #
-#         256, 512, 1024
-#         from small -> large
-#         """
-#         # max feature
-#         global level_0_resized, level_1_resized, level_2_resized
-#         x_level_0 = x[2]
-#         # mid feature
-#         x_level_1 = x[1]
-#         # min feature
-#         x_level_2 = x[0]
-
-#         if self.level == 0:
-#             level_0_resized = x_level_0
-#             level_1_resized = self.stride_level_1(x_level_1)
-#             level_2_downsampled_inter = F.max_pool2d(x_level_2, 3, stride=2, padding=1)
-#             level_2_resized = self.stride_level_2(level_2_downsampled_inter)
-#         elif self.level == 1:
-#             level_0_compressed = self.compress_level_0(x_level_0)
-#             level_0_resized = F.interpolate(level_0_compressed, scale_factor=2, mode='nearest')
-#             level_1_resized = x_level_1
-#             level_2_resized = self.stride_level_2(x_level_2)
-#         elif self.level == 2:
-#             level_0_compressed = self.compress_level_0(x_level_0)
-#             level_0_resized = F.interpolate(level_0_compressed, scale_factor=4, mode='nearest')
-#             x_level_1_compressed = self.compress_level_1(x_level_1)
-#             level_1_resized = F.interpolate(x_level_1_compressed, scale_factor=2, mode='nearest')
-#             level_2_resized = x_level_2
-
-#         level_0_weight_v = self.weight_level_0(level_0_resized)
-#         level_1_weight_v = self.weight_level_1(level_1_resized)
-#         level_2_weight_v = self.weight_level_2(level_2_resized)
-
-#         levels_weight_v = torch.cat((level_0_weight_v, level_1_weight_v, level_2_weight_v), 1)
-#         levels_weight = self.weight_levels(levels_weight_v)
-#         levels_weight = F.softmax(levels_weight, dim=1)
-
-#         fused_out_reduced = level_0_resized * levels_weight[:, 0:1, :, :] + \
-#                             level_1_resized * levels_weight[:, 1:2, :, :] + \
-#                             level_2_resized * levels_weight[:, 2:, :, :]
-
-#         out = self.expand(fused_out_reduced)
-
-#         if self.vis:
-#             return out, levels_weight, fused_out_reduced.sum(dim=1)
-#         else:
-#             return out
-    
-
-# def add_conv(in_ch, out_ch, ksize, stride, leaky=True):
-#     """
-#     Add a conv2d / batchnorm / leaky ReLU block.
-#     Args:
-#         in_ch (int): number of input channels of the convolution layer.
-#         out_ch (int): number of output channels of the convolution layer.
-#         ksize (int): kernel size of the convolution layer.
-#         stride (int): stride of the convolution layer.
-#     Returns:
-#         stage (Sequential) : Sequential layers composing a convolution block.
-#     """
-#     stage = nn.Sequential()
-#     pad = (ksize - 1) // 2
-#     stage.add_module('conv', nn.Conv2d(in_channels=in_ch,
-#                                        out_channels=out_ch, kernel_size=ksize, stride=stride,
-#                                        padding=pad, bias=False))
-#     stage.add_module('batch_norm', nn.BatchNorm2d(out_ch))
-#     if leaky:
-#         stage.add_module('leaky', nn.LeakyReLU(0.1))
-#     else:
-#         stage.add_module('relu6', nn.ReLU6(inplace=True))
-#     return stage
-
-# class ASFF(nn.Module):
-#     def __init__(self, level, rfb=False, vis=False):
-#         super(ASFF, self).__init__()
-#         print("Running ASFF")
-#         print("Level is", level)
-#         self.level = level
-#         self.dim = [512, 256, 256]
-#         self.inter_dim = self.dim[self.level]
-#         if level==0:
-#             self.stride_level_1 = add_conv(256, self.inter_dim, 3, 2)
-#             self.stride_level_2 = add_conv(256, self.inter_dim, 3, 2)
-#             self.expand = add_conv(self.inter_dim, 1024, 3, 1)
-#         elif level==1:
-#             self.compress_level_0 = add_conv(512, self.inter_dim, 1, 1)
-#             self.stride_level_2 = add_conv(256, self.inter_dim, 3, 2)
-#             self.expand = add_conv(self.inter_dim, 512, 3, 1)
-#         elif level==2:
-#             self.compress_level_0 = add_conv(512, self.inter_dim, 1, 1)
-#             self.expand = add_conv(self.inter_dim, 256, 3, 1)
-
-#         compress_c = 8 if rfb else 16  #when adding rfb, we use half number of channels to save memory
-
-#         self.weight_level_0 = add_conv(self.inter_dim, compress_c, 1, 1)
-#         self.weight_level_1 = add_conv(self.inter_dim, compress_c, 1, 1)
-#         self.weight_level_2 = add_conv(self.inter_dim, compress_c, 1, 1)
-
-#         self.weight_levels = nn.Conv2d(compress_c*3, 3, kernel_size=1, stride=1, padding=0)
-#         self.vis= vis
-
-
-#     def forward(self, x_level_0, x_level_1, x_level_2):
-#         if self.level==0:
-#             level_0_resized = x_level_0
-#             level_1_resized = self.stride_level_1(x_level_1)
-
-#             level_2_downsampled_inter =F.max_pool2d(x_level_2, 3, stride=2, padding=1)
-#             level_2_resized = self.stride_level_2(level_2_downsampled_inter)
-
-#         elif self.level==1:
-#             level_0_compressed = self.compress_level_0(x_level_0)
-#             level_0_resized =F.interpolate(level_0_compressed, scale_factor=2, mode='nearest')
-#             level_1_resized =x_level_1
-#             level_2_resized =self.stride_level_2(x_level_2)
-#         elif self.level==2:
-#             level_0_compressed = self.compress_level_0(x_level_0)
-#             level_0_resized =F.interpolate(level_0_compressed, scale_factor=4, mode='nearest')
-#             level_1_resized =F.interpolate(x_level_1, scale_factor=2, mode='nearest')
-#             level_2_resized =x_level_2
-
-#         level_0_weight_v = self.weight_level_0(level_0_resized)
-#         level_1_weight_v = self.weight_level_1(level_1_resized)
-#         level_2_weight_v = self.weight_level_2(level_2_resized)
-#         levels_weight_v = torch.cat((level_0_weight_v, level_1_weight_v, level_2_weight_v),1)
-#         levels_weight = self.weight_levels(levels_weight_v)
-#         levels_weight = F.softmax(levels_weight, dim=1)
-
-#         fused_out_reduced = level_0_resized * levels_weight[:,0:1,:,:]+\
-#                             level_1_resized * levels_weight[:,1:2,:,:]+\
-#                             level_2_resized * levels_weight[:,2:,:,:]
-
-#         out = self.expand(fused_out_reduced)
-
-#         if self.vis:
-#             return out, levels_weight, fused_out_reduced.sum(dim=1)
-#         else:
-#             return out    
 
 class Concat(nn.Module):
     """Concatenate a list of tensors along dimension."""
