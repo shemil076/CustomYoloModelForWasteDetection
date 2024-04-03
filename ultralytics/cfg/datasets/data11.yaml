@@ -1,0 +1,13 @@
+train: /content/yolo_data/images/train
+val: /content/yolo_data/images/val
+#test: ../test/images
+
+nc: 11
+names: ['aluminum - Non_biodegradable-Recyclable', 'cardboard - Non_Biodegradable-Recyclable', 'food wrapper - Non_Biodegradable', 'glass bottle - Non_Biodegradable', 'left-over food - Biodegradable', 'paper - Biodegradable-Recyclable', 'plastic bag - Non_Biodegradable', 'plastic bottle - Non_Biodegradable', 'plastic container - Non_Biodegradable', 'plastic sachet - Non_Biodegradable', 'styrofoam containers - Non_Biodegradable']
+
+roboflow:
+  workspace: fyp-5bjbu
+  project: waste-detection-in-a-pile
+  version: 13
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/fyp-5bjbu/waste-detection-in-a-pile/dataset/13
