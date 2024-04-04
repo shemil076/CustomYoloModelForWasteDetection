@@ -1,5 +1,6 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -98,13 +99,59 @@ class EIoULoss(nn.Module):
         eiou_loss = 1 - eiou
         
         return eiou_loss.mean()
+    
+class CIoULoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, pred, target, xywh=True):
+        """
+        Calculate the Complete Intersection over Union (CIoU) loss.
+        
+        Args:
+            pred (torch.Tensor): Predicted bounding boxes, shape (N, 4).
+            target (torch.Tensor): Target bounding boxes, shape (N, 4).
+            xywh (bool): Whether the bounding box format is (x, y, w, h).
+
+        Returns:
+            torch.Tensor: The CIoU loss.
+        """
+        if xywh:
+            pred = xywh2xyxy(pred)
+            target = xywh2xyxy(target)
+        
+        # Calculate IoU
+        iou = bbox_iou(pred, target, xywh=False)
+        
+        # Center distance
+        pred_center = (pred[:, :2] + pred[:, 2:]) / 2
+        target_center = (target[:, :2] + target[:, 2:]) / 2
+        center_distance = torch.norm(pred_center - target_center, dim=1) ** 2
+        
+        # Enclosing box
+        enclosing_tl = torch.min(pred[:, :2], target[:, :2])
+        enclosing_br = torch.max(pred[:, 2:], target[:, 2:])
+        enclosing_diag = torch.norm(enclosing_br - enclosing_tl, dim=1) ** 2
+        
+        # Aspect ratio
+        pred_wh = pred[:, 2:] - pred[:, :2]
+        target_wh = target[:, 2:] - target[:, :2]
+        v = (4 / (math.pi ** 2)) * torch.pow(torch.atan(target_wh[:, 0] / target_wh[:, 1]) - torch.atan(pred_wh[:, 0] / pred_wh[:, 1]), 2)
+        with torch.no_grad():
+            alpha = v / (1 - iou + v)
+        
+        # Combine terms
+        ciou = iou - (center_distance / enclosing_diag + v * alpha)
+        ciou_loss = 1 - ciou
+        return ciou_loss.mean()
+
 
 class BboxLoss(nn.Module):
     def __init__(self, reg_max, use_dfl=False):
         super().__init__()
         self.reg_max = reg_max
         self.use_dfl = use_dfl
-        self.eiou_loss = EIoULoss()
+        self.eiou_loss = CIoULoss()
 
     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
         # Implementation for BboxLoss using EIoU
