@@ -151,7 +151,7 @@ class BboxLoss(nn.Module):
         super().__init__()
         self.reg_max = reg_max
         self.use_dfl = use_dfl
-        self.eiou_loss = CIoULoss()
+        self.eiou_loss = EIoULoss()
 
     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
         # Implementation for BboxLoss using EIoU
