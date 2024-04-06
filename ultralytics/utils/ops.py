@@ -208,7 +208,6 @@ def bbox_iou_for_nms(box1, box2, xywh=False, eps=1e-7):
     rho_h2 = ((b2_y2 - b2_y1) - (b1_y2 - b1_y1)) ** 2
     cw2 = cw ** 2 + eps
     ch2 = ch ** 2 + eps
-    print("hi i am using this 👀")
     return iou - (rho2 / c2 + rho_w2 / cw2 + rho_h2 / ch2) # EIoU
 
 def soft_nms(bboxes, scores, iou_thresh=0.5, sigma=0.5,score_threshold=0.25):
@@ -241,6 +240,7 @@ def soft_nms(bboxes, scores, iou_thresh=0.5, sigma=0.5,score_threshold=0.25):
                 newOrder[[0,maxScoreIndex],] = newOrder[[maxScoreIndex,0],]
             order = order[newOrder+1]
     
+    print("I am inside 👀")
     return torch.LongTensor(keep)
 
 def non_max_suppression(
