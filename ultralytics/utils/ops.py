@@ -240,7 +240,6 @@ def soft_nms(bboxes, scores, iou_thresh=0.5, sigma=0.5,score_threshold=0.25):
                 newOrder[[0,maxScoreIndex],] = newOrder[[maxScoreIndex,0],]
             order = order[newOrder+1]
     
-    print("I am inside 👀")
     return torch.LongTensor(keep)
 
 def non_max_suppression(
