@@ -147,7 +147,7 @@ class CIoULoss(nn.Module):
 
 
 class BboxLoss(nn.Module):
-    def __init__(self, reg_max, use_dfl=False):
+    def __init__(self, reg_max, use_dfl=True):
         super().__init__()
         self.reg_max = reg_max
         self.use_dfl = use_dfl
