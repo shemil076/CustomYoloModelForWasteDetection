@@ -98,6 +98,7 @@ class EIoULoss(nn.Module):
         eiou = iou - (center_distance + aspect_ratio_diff)
         eiou_loss = 1 - eiou
         
+        print("eiou_loss.mean() is ",eiou_loss.mean())
         return eiou_loss.mean()
     
 class CIoULoss(nn.Module):
@@ -145,18 +146,73 @@ class CIoULoss(nn.Module):
         ciou_loss = 1 - ciou
         return ciou_loss.mean()
 
+def bbox_eiou(pred_bboxes, target_bboxes, xywh=True):
+    """
+    Compute the Enhanced IoU (EIoU) between each pair of predicted and target bounding boxes.
+    
+    Args:
+    - pred_bboxes (Tensor): Predicted bounding boxes of shape (N, 4).
+    - target_bboxes (Tensor): Target bounding boxes of shape (N, 4).
+    - xywh (bool): True if the bounding box format is (x_center, y_center, width, height),
+                   False if the format is (x_min, y_min, x_max, y_max).
+                   
+    Returns:
+    - Tensor: EIoU scores for each bounding box pair.
+    """
+    if xywh:
+        # Convert from (x_center, y_center, width, height) to (x_min, y_min, x_max, y_max)
+        pred_bboxes = torch.cat((pred_bboxes[:, :2] - pred_bboxes[:, 2:]/2, 
+                                 pred_bboxes[:, :2] + pred_bboxes[:, 2:]/2), dim=1)
+        target_bboxes = torch.cat((target_bboxes[:, :2] - target_bboxes[:, 2:]/2, 
+                                   target_bboxes[:, :2] + target_bboxes[:, 2:]/2), dim=1)
+    
+    # Calculate intersection
+    inter_rect_xymin = torch.max(pred_bboxes[:, :2], target_bboxes[:, :2])
+    inter_rect_xymax = torch.min(pred_bboxes[:, 2:], target_bboxes[:, 2:])
+    inter_area = torch.prod(torch.clamp(inter_rect_xymax - inter_rect_xymin, min=0), dim=1)
+    
+    # Calculate union
+    pred_area = torch.prod(pred_bboxes[:, 2:] - pred_bboxes[:, :2], dim=1)
+    target_area = torch.prod(target_bboxes[:, 2:] - target_bboxes[:, :2], dim=1)
+    union_area = pred_area + target_area - inter_area
+    
+    # IoU
+    iou = inter_area / union_area
+    
+    # Aspect ratio penalty
+    pred_aspect_ratio = (pred_bboxes[:, 2] - pred_bboxes[:, 0]) / (pred_bboxes[:, 3] - pred_bboxes[:, 1])
+    target_aspect_ratio = (target_bboxes[:, 2] - target_bboxes[:, 0]) / (target_bboxes[:, 3] - target_bboxes[:, 1])
+    aspect_ratio_diff = torch.abs(pred_aspect_ratio - target_aspect_ratio)
+    
+    # Enhanced IoU (simplified version for demonstration)
+    eiou = iou - aspect_ratio_diff # Aspect ratio penalty
+    
+    return eiou
 
 class BboxLoss(nn.Module):
-    def __init__(self, reg_max, use_dfl=True):
+    """Criterion class for computing training losses during training with Enhanced IoU (EIoU)."""
+
+    def __init__(self, reg_max, use_dfl=False):
+        """Initialize the BboxLoss module with regularization maximum and DFL settings."""
         super().__init__()
         self.reg_max = reg_max
         self.use_dfl = use_dfl
-        self.eiou_loss = EIoULoss()
 
     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
-        # Implementation for BboxLoss using EIoU
-        eiou_loss = self.eiou_loss(pred_bboxes[fg_mask], target_bboxes[fg_mask])
-        return eiou_loss, torch.tensor(0.0).to(pred_dist.device)
+        """EIoU loss."""
+        weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
+        eiou = bbox_eiou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False)
+        loss_eiou = ((1.0 - eiou) * weight).sum() / target_scores_sum
+
+        # DFL loss
+        if self.use_dfl:
+            target_ltrb = bbox2dist(anchor_points, target_bboxes, self.reg_max)
+            loss_dfl = self._df_loss(pred_dist[fg_mask].view(-1, self.reg_max + 1), target_ltrb[fg_mask]) * weight
+            loss_dfl = loss_dfl.sum() / target_scores_sum
+        else:
+            loss_dfl = torch.tensor(0.0).to(pred_dist.device)
+
+        return loss_eiou, loss_dfl
 
     @staticmethod
     def _df_loss(pred_dist, target):
@@ -166,10 +222,10 @@ class BboxLoss(nn.Module):
         Distribution Focal Loss (DFL) proposed in Generalized Focal Loss
         https://ieeexplore.ieee.org/document/9792391
         """
-        tl = target.long()  # target left
-        tr = tl + 1  # target right
-        wl = tr - target  # weight left
-        wr = 1 - wl  # weight right
+        tl = target.long()
+        tr = tl + 1
+        wl = tr - target
+        wr = 1 - wl
         return (
             F.cross_entropy(pred_dist, tl.view(-1), reduction="none").view(tl.shape) * wl
             + F.cross_entropy(pred_dist, tr.view(-1), reduction="none").view(tl.shape) * wr
