@@ -146,21 +146,13 @@ class CIoULoss(nn.Module):
         ciou_loss = 1 - ciou
         return ciou_loss.mean()
 
+
 def bbox_eiou(pred_bboxes, target_bboxes, xywh=True):
     """
-    Compute the Enhanced IoU (EIoU) between each pair of predicted and target bounding boxes.
-    
-    Args:
-    - pred_bboxes (Tensor): Predicted bounding boxes of shape (N, 4).
-    - target_bboxes (Tensor): Target bounding boxes of shape (N, 4).
-    - xywh (bool): True if the bounding box format is (x_center, y_center, width, height),
-                   False if the format is (x_min, y_min, x_max, y_max).
-                   
-    Returns:
-    - Tensor: EIoU scores for each bounding box pair.
+    Revised calculation of Enhanced IoU (EIoU) between predicted and target bounding boxes.
     """
     if xywh:
-        # Convert from (x_center, y_center, width, height) to (x_min, y_min, x_max, y_max)
+        # Convert from xywh to xyxy format
         pred_bboxes = torch.cat((pred_bboxes[:, :2] - pred_bboxes[:, 2:]/2, 
                                  pred_bboxes[:, :2] + pred_bboxes[:, 2:]/2), dim=1)
         target_bboxes = torch.cat((target_bboxes[:, :2] - target_bboxes[:, 2:]/2, 
@@ -179,13 +171,15 @@ def bbox_eiou(pred_bboxes, target_bboxes, xywh=True):
     # IoU
     iou = inter_area / union_area
     
-    # Aspect ratio penalty
+    # Aspect ratio penalty (softened)
     pred_aspect_ratio = (pred_bboxes[:, 2] - pred_bboxes[:, 0]) / (pred_bboxes[:, 3] - pred_bboxes[:, 1])
     target_aspect_ratio = (target_bboxes[:, 2] - target_bboxes[:, 0]) / (target_bboxes[:, 3] - target_bboxes[:, 1])
     aspect_ratio_diff = torch.abs(pred_aspect_ratio - target_aspect_ratio)
+    aspect_ratio_penalty = aspect_ratio_diff * 0.1  # Example scaling factor, adjust as needed
     
-    # Enhanced IoU (simplified version for demonstration)
-    eiou = iou - aspect_ratio_diff # Aspect ratio penalty
+    # Enhanced IoU with softened aspect ratio penalty
+    eiou = iou - aspect_ratio_penalty
+    eiou = torch.clamp(eiou, min=0)  # Ensure EIoU is not negative
     
     return eiou
 
