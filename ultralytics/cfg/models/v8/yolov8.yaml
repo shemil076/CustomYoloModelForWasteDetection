@@ -13,6 +13,22 @@ scales: # model compound scaling constants, i.e. 'model=yolov8n.yaml' will call 
   x: [1.00, 1.25, 512] # YOLOv8x summary: 365 layers, 68229648 parameters, 68229632 gradients, 258.5 GFLOPs
 
 # YOLOv8.0n backbone
+# backbone:
+#   # [from, repeats, module, args]
+#   - [-1, 1, Conv, [64, 3, 2]] # Initial convolution layer to reduce spatial dimension
+#   - [-1, 1, Conv, [128, 3, 2]] # Further reduce dimension, increase channels
+#   - [-1, 3, C2f, [128, True]] # First C2f block, extract features with potential occlusions
+#   - [-1, 1, Conv, [256, 3, 2]] 
+#   - [-1, 3, C2f, [256, True]] # Second C2f block, more complex features
+#   - [-1, 1, CBAM, [256]] # Apply CBAM early to focus attention after initial feature extraction
+#   - [-1, 1, Conv, [512, 3, 2]] 
+#   - [-1, 3, C2f, [512, True]] # Before dense blocks, focusing on higher-level features
+#   - [-1, 1, CBAM, [512]] # CBAM to refine attention on higher-level occluded object features
+#   - [-1, 1, Conv, [1024, 3, 2]] 
+#   - [-1, 2, C2f, [1024, True]] # Reduced repeats for efficiency, maintaining depth
+#   - [-1, 1, CBAM, [1024]] # CBAM before SPPF, highest-level attention focusing
+#   - [-1, 1, SPPF, [1024, 5]] # Final pooling to gather global contextual information
+
 backbone:
   # [from, repeats, module, args]
   - [-1, 1, Conv, [64, 3, 2]] # 0-P1/2
@@ -22,10 +38,10 @@ backbone:
   - [-1, 6, C2f, [256, True]]
   - [-1, 1, Conv, [512, 3, 2]] # 5-P4/16
   - [-1, 6, C2f, [512, True]]
-  - [-1, 1, CBAM, [512]] # CBAM after C2f block
+  # - [-1, 1, CBAM, [512]] # CBAM after C2f block
   - [-1, 1, Conv, [1024, 3, 2]] # 7-P5/32
   - [-1, 3, C2f, [1024, True]]
-  - [-1, 1, CBAM, [1024]] # CBAM before SPPF for enhanced attention
+  # - [-1, 1, CBAM, [1024]] # CBAM before SPPF for enhanced attention
   - [-1, 1, SPPF, [1024, 5]] # 9
 
 # YOLOv8.0n head
