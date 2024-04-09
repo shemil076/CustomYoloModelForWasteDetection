@@ -160,7 +160,7 @@ def nms_rotated(boxes, scores, threshold=0.45):
     return sorted_idx[pick]
 
 
-def bbox_iou_for_nms(box1, box2, eps=1e-7):
+def bbox_eiou(box1, box2, eps=1e-7):
     """
     Calculate Intersection over Union (IoU) of box1(1, 4) to box2(n, 4).
 
@@ -217,7 +217,7 @@ def soft_nms(bboxes, scores, iou_thresh=0.5, sigma=0.5,score_threshold=0.25):
             i = order[0]
             keep.append(i)
         
-        iou = bbox_iou_for_nms(bboxes[i:i+1], bboxes[order[1:]]).squeeze()
+        iou = bbox_eiou(bboxes[i:i+1], bboxes[order[1:]]).squeeze()
         
         idx = (iou > iou_thresh).nonzero().squeeze()
         if idx.numel() > 0: 
@@ -350,8 +350,8 @@ def non_max_suppression(
             i = nms_rotated(boxes, scores, iou_thres)
         else:
             boxes = x[:, :4] + c  # boxes (offset by class)
-            # i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
-            i = soft_nms(boxes, scores, iou_thres)
+            i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
+            # i = soft_nms(boxes, scores, iou_thres)
         i = i[:max_det]  # limit detections
 
         # # Experimental

@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .ops import bbox_iou_for_nms
+from .ops import bbox_eiou
 
 from ultralytics.utils.metrics import OKS_SIGMA
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
@@ -149,7 +149,7 @@ class CIoULoss(nn.Module):
         return ciou_loss.mean()
 
 
-def bbox_eiou(pred_bboxes, target_bboxes, xywh=True):
+def bbox_eious(pred_bboxes, target_bboxes, xywh=True):
     """
     Revised calculation of Enhanced IoU (EIoU) between predicted and target bounding boxes.
     """
@@ -281,8 +281,8 @@ class BboxLoss(nn.Module):
     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
         """IoU loss."""
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
-        # iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, EIoU=True,Focal=True)
-        iou = bbox_iou_for_nms(pred_bboxes[fg_mask], target_bboxes[fg_mask])
+
+        iou = bbox_eiou(pred_bboxes[fg_mask], target_bboxes[fg_mask])
         
         if type(iou) is tuple:
             if len(iou) == 2:
