@@ -160,51 +160,51 @@ def nms_rotated(boxes, scores, threshold=0.45):
     return sorted_idx[pick]
 
 
-# def bbox_eiou(box1, box2, eps=1e-7):
-#     """
-#     Calculate Intersection over Union (IoU) of box1(1, 4) to box2(n, 4).
+def bbox_eiou(box1, box2, eps=1e-7):
+    """
+    Calculate Intersection over Union (IoU) of box1(1, 4) to box2(n, 4).
 
-#     Args:
-#         box1 (torch.Tensor): A tensor representing a single bounding box with shape (1, 4).
-#         box2 (torch.Tensor): A tensor representing n bounding boxes with shape (n, 4).
-#         xywh (bool, optional): If True, input boxes are in (x, y, w, h) format. If False, input boxes are in
-#                                (x1, y1, x2, y2) format. Defaults to True.
-#         eps (float, optional): A small value to avoid division by zero. Defaults to 1e-7.
+    Args:
+        box1 (torch.Tensor): A tensor representing a single bounding box with shape (1, 4).
+        box2 (torch.Tensor): A tensor representing n bounding boxes with shape (n, 4).
+        xywh (bool, optional): If True, input boxes are in (x, y, w, h) format. If False, input boxes are in
+                               (x1, y1, x2, y2) format. Defaults to True.
+        eps (float, optional): A small value to avoid division by zero. Defaults to 1e-7.
 
-#     Returns:
-#         (torch.Tensor): IoU, GIoU, values depending on the specified flags.
-#     """
+    Returns:
+        (torch.Tensor): IoU, GIoU, values depending on the specified flags.
+    """
 
-#     # Get the coordinates of bounding boxes
-#     b1_x1, b1_y1, b1_x2, b1_y2 = box1.chunk(4, -1)
-#     b2_x1, b2_y1, b2_x2, b2_y2 = box2.chunk(4, -1)
-#     w1, h1 = b1_x2 - b1_x1, b1_y2 - b1_y1 + eps
-#     w2, h2 = b2_x2 - b2_x1, b2_y2 - b2_y1 + eps
+    # Get the coordinates of bounding boxes
+    b1_x1, b1_y1, b1_x2, b1_y2 = box1.chunk(4, -1)
+    b2_x1, b2_y1, b2_x2, b2_y2 = box2.chunk(4, -1)
+    w1, h1 = b1_x2 - b1_x1, b1_y2 - b1_y1 + eps
+    w2, h2 = b2_x2 - b2_x1, b2_y2 - b2_y1 + eps
 
-#     # Intersection area
-#     inter = (b1_x2.minimum(b2_x2) - b1_x1.maximum(b2_x1)).clamp_(0) * \
-#             (b1_y2.minimum(b2_y2) - b1_y1.maximum(b2_y1)).clamp_(0)
+    # Intersection area
+    inter = (b1_x2.minimum(b2_x2) - b1_x1.maximum(b2_x1)).clamp_(0) * \
+            (b1_y2.minimum(b2_y2) - b1_y1.maximum(b2_y1)).clamp_(0)
 
-#     # Union Area
-#     union = w1 * h1 + w2 * h2 - inter + eps
+    # Union Area
+    union = w1 * h1 + w2 * h2 - inter + eps
 
-#     # IoU
-#     iou = inter / union
+    # IoU
+    iou = inter / union
 
-#     cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(b2_x1)  # convex (smallest enclosing box) width
-#     ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)  # convex height
+    cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(b2_x1)  # convex (smallest enclosing box) width
+    ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)  # convex height
 
-#     c2 = cw ** 2 + ch ** 2 + eps  # convex diagonal squared
-#     rho2 = ((b2_x1 + b2_x2 - b1_x1 - b1_x2) ** 2 + (b2_y1 + b2_y2 - b1_y1 - b1_y2) ** 2) / 4  # center dist ** 2
+    c2 = cw ** 2 + ch ** 2 + eps  # convex diagonal squared
+    rho2 = ((b2_x1 + b2_x2 - b1_x1 - b1_x2) ** 2 + (b2_y1 + b2_y2 - b1_y1 - b1_y2) ** 2) / 4  # center dist ** 2
 
 
-#     rho_w2 = ((b2_x2 - b2_x1) - (b1_x2 - b1_x1)) ** 2
-#     rho_h2 = ((b2_y2 - b2_y1) - (b1_y2 - b1_y1)) ** 2
-#     cw2 = cw ** 2 + eps
-#     ch2 = ch ** 2 + eps
-#     return iou - (rho2 / c2 + rho_w2 / cw2 + rho_h2 / ch2) # EIoU
+    rho_w2 = ((b2_x2 - b2_x1) - (b1_x2 - b1_x1)) ** 2
+    rho_h2 = ((b2_y2 - b2_y1) - (b1_y2 - b1_y1)) ** 2
+    cw2 = cw ** 2 + eps
+    ch2 = ch ** 2 + eps
+    return iou - (rho2 / c2 + rho_w2 / cw2 + rho_h2 / ch2) # EIoU
 
-def box_iou_for_nms(box1, box2, GIoU=False, DIoU=False, CIoU=False, SIoU=False, EIou=False, eps=1e-7):
+def box_iou_for_nms(box1, box2, GIoU=False, DIoU=False, CIoU=False, SIoU=False, EIou=True, eps=1e-7):
     # Returns Intersection over Union (IoU) of box1(1,4) to box2(n,4)
 
     b1_x1, b1_y1, b1_x2, b1_y2 = box1.chunk(4, -1)
@@ -273,7 +273,7 @@ def soft_nms(bboxes, scores, iou_thresh=0.5,sigma=0.5,score_threshold=0.25):
             i = order[0]
             keep.append(i)
         
-        iou = box_iou_for_nms(bboxes[i], bboxes[order[1:]]).squeeze()
+        iou = box_iou_for_nms(bboxes[i], bboxes[order[1:]], EIou=True).squeeze()
         
         idx = (iou > iou_thresh).nonzero().squeeze()
         if idx.numel() > 0: 
@@ -406,8 +406,8 @@ def non_max_suppression(
             i = nms_rotated(boxes, scores, iou_thres)
         else:
             boxes = x[:, :4] + c  # boxes (offset by class)
-            i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
-            # i = soft_nms(boxes, scores, iou_thres)
+            # i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
+            i = soft_nms(boxes, scores, iou_thres)
         i = i[:max_det]  # limit detections
 
         # # Experimental
