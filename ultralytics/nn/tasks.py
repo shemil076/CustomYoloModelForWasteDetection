@@ -759,7 +759,6 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
 
         m = getattr(torch.nn, m[3:]) if "nn." in m else globals()[m]  # get module
 
-        print("m in line 762", m)
 
         for j, a in enumerate(args):
             if isinstance(a, str):

@@ -4,8 +4,8 @@
 
 #path: ../datasets/coco128  # dataset root dir
 path: /Users/pramudithakarunarathna/Documents/IIT BEng Software Engineering/FYP/Implementations/wastePileDetection/data
-train: /Users/pramudithakarunarathna/Documents/IIT BEng Software Engineering/FYP/Implementations/wastePileDetection/data/train/images # train images (relative to 'path') 128 images
-val: /Users/pramudithakarunarathna/Documents/IIT BEng Software Engineering/FYP/Implementations/wastePileDetection/data/val/images # val images (relative to 'path') 128 images
+train: /Users/pramudithakarunarathna/Documents/IIT BEng Software Engineering/FYP/Implementations/codeTesting/valid/images # train images (relative to 'path') 128 images
+val: /Users/pramudithakarunarathna/Documents/IIT BEng Software Engineering/FYP/Implementations/codeTesting/train/images # val images (relative to 'path') 128 images
 # test:  # test images (optional)
 
 # Classes
